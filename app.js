@@ -342,47 +342,54 @@ const valDiam    = document.getElementById('val-diameter');
 const valLen     = document.getElementById('val-length');
 const valZ       = document.getElementById('val-zpos');
 
-// Populate the ±range tags flanking each slider.
-// Length uses VESSEL_DATA range; diameter and zPos use slider min/max vs default.
-function setRangeTags(def) {
-  // Length
-  const lenP     = vp(def.id, 1);
-  const lenRange = lenP && lenP.range ? lenP.range : 0;
-  document.getElementById('sl-length-lo').textContent = `−${lenRange.toFixed(1)} mm`;
-  document.getElementById('sl-length-hi').textContent = `+${lenRange.toFixed(1)} mm`;
-
-  // Diameter — show delta from current default to each end of the slider
-  const dDef = def.params.diameter;
-  const dLo  = (dDef - +slDiameter.min).toFixed(3);
-  const dHi  = (+slDiameter.max - dDef).toFixed(3);
-  document.getElementById('sl-diameter-lo').textContent = `−${dLo}`;
-  document.getElementById('sl-diameter-hi').textContent = `+${dHi}`;
-
-  // Z Position — symmetric, fixed range
-  document.getElementById('sl-zpos-lo').textContent = '−0.50';
-  document.getElementById('sl-zpos-hi').textContent = '+0.50';
-}
-
 function showPanel(def) {
   panelTitle.textContent = def.name;
 
-  // Configure length slider bounds from VESSEL_DATA
-  const cfg = lengthSliderConfig(def.id);
+  // Length slider — bounds and default from VESSEL_DATA
+  const cfg      = lengthSliderConfig(def.id);
   slLength.min   = cfg.min;
   slLength.max   = cfg.max;
-  slLength.step  = cfg.step;
+  slLength.step  = 0.1;
   slLength.value = def.params.length;
 
+  // Diameter slider
+  slDiameter.min   = 0.005;
+  slDiameter.max   = 0.100;
+  slDiameter.step  = 0.001;
   slDiameter.value = def.params.diameter;
-  slZPos.value     = def.params.zPos;
 
-  setRangeTags(def);
+  // Z-position slider
+  slZPos.min   = -0.5;
+  slZPos.max   =  0.5;
+  slZPos.step  =  0.01;
+  slZPos.value = def.params.zPos;
+
+  syncRangeTags(def);
   syncLabels(def);
   panel.classList.add('open');
 }
 
 function hidePanel() { panel.classList.remove('open'); }
 
+// Set the −X / +X tags that flank each slider.
+function syncRangeTags(def) {
+  // Length: ± comes from VESSEL_DATA range column
+  const lenP  = vp(def.id, 1);
+  const lenR  = lenP && lenP.range ? lenP.range : 0;
+  document.getElementById('sl-length-lo').textContent  = `−${lenR.toFixed(1)} mm`;
+  document.getElementById('sl-length-hi').textContent  = `+${lenR.toFixed(1)} mm`;
+
+  // Diameter: delta from current value to each end of its fixed slider range
+  const d    = def.params.diameter;
+  document.getElementById('sl-diameter-lo').textContent = `−${(d - 0.005).toFixed(3)}`;
+  document.getElementById('sl-diameter-hi').textContent = `+${(0.100 - d).toFixed(3)}`;
+
+  // Z Position: fixed symmetric range
+  document.getElementById('sl-zpos-lo').textContent = '−0.50';
+  document.getElementById('sl-zpos-hi').textContent = '+0.50';
+}
+
+// Display current slider values as plain absolute numbers — no percentages.
 function syncLabels(def) {
   const p = def.params;
   valDiam.textContent = p.diameter.toFixed(3);
@@ -394,8 +401,9 @@ function onSlider() {
   if (!selectedId) return;
   const def = ARTERY_DEFS.find(d => d.id === selectedId);
   def.params.diameter = +slDiameter.value;
-  def.params.length   = +slLength.value;   // stored as mm; converted in buildArtery
+  def.params.length   = +slLength.value;  // mm; converted to 0–1 fraction in buildArtery
   def.params.zPos     = +slZPos.value;
+  syncRangeTags(def);
   syncLabels(def);
   buildArtery(def);
 }
