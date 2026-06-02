@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Facial Artery Viewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #222;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #eee;
+    }
+
+    canvas { display: block; }
+
+    /* ── Overlays ── */
+    #title {
+      position: fixed; top: 18px; left: 18px;
+      font-size: 17px; font-weight: 600;
+      letter-spacing: 0.02em;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    #hint {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      font-size: 12px; opacity: 0.45;
+      pointer-events: none; white-space: nowrap;
+      user-select: none;
+    }
+
+    #loading {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 14px; color: #777;
+      pointer-events: none;
+    }
+
+    /* ── Parameter Panel ── */
+    #panel {
+      position: fixed; right: -300px; top: 50%; transform: translateY(-50%);
+      width: 270px;
+      background: rgba(20, 20, 20, 0.93);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 10px;
+      padding: 22px;
+      transition: right 0.28s cubic-bezier(.4,0,.2,1);
+      z-index: 10;
+    }
+    #panel.open { right: 18px; }
+
+    #panel-title {
+      font-size: 11px; font-weight: 700;
+      color: #00cc66;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .slider-row { margin-bottom: 18px; }
+    .slider-label {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 12px; color: #888;
+      margin-bottom: 7px;
+    }
+    .slider-val {
+      color: #ddd;
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+    }
+
+    input[type=range] {
+      width: 100%; height: 4px;
+      -webkit-appearance: none; appearance: none;
+      background: rgba(255,255,255,0.12);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 15px; height: 15px;
+      border-radius: 50%;
+      background: #00cc66;
+      cursor: pointer;
+      box-shadow: 0 0 0 2px rgba(0,204,102,0.25);
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 15px; height: 15px;
+      border-radius: 50%;
+      background: #00cc66;
+      cursor: pointer; border: none;
+    }
+
+    #close-panel {
+      margin-top: 4px; width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      color: #bbb; border-radius: 6px;
+      padding: 8px; cursor: pointer;
+      font-size: 12px;
+      transition: background 0.14s;
+    }
+    #close-panel:hover { background: rgba(255,255,255,0.12); }
+
+    /* ── Hamburger ── */
+    #hamburger {
+      position: fixed; bottom: 18px; left: 18px;
+      cursor: pointer; z-index: 20;
+      width: 36px; height: 36px;
+      background: rgba(20,20,20,0.88);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.14s;
+    }
+    #hamburger:hover { background: rgba(50,50,50,0.95); }
+
+    #menu {
+      position: fixed; bottom: 62px; left: 18px;
+      background: rgba(20,20,20,0.96);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      overflow: hidden;
+      display: none; z-index: 20;
+      min-width: 140px;
+    }
+    #menu.open { display: block; }
+
+    .menu-item {
+      padding: 10px 18px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .menu-item:hover { background: rgba(255,255,255,0.07); }
+
+    /* ── About Modal ── */
+    #modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.65);
+      display: none; align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    #modal-overlay.open { display: flex; }
+
+    #modal {
+      background: #1c1c1c;
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 380px; width: 90%;
+    }
+    #modal h2 { font-size: 18px; margin-bottom: 14px; }
+    #modal p  { font-size: 13px; color: #999; line-height: 1.65; }
+    #modal p + p { margin-top: 10px; }
+
+    #close-modal {
+      margin-top: 26px; width: 100%;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.10);
+      color: #ccc; border-radius: 6px;
+      padding: 9px; cursor: pointer;
+      font-size: 13px;
+      transition: background 0.14s;
+    }
+    #close-modal:hover { background: rgba(255,255,255,0.13); }
+  </style>
+</head>
+<body>
+
+  <div id="title">Facial Artery Viewer</div>
+  <div id="hint">Click an artery to inspect &nbsp;&middot;&nbsp; Drag to orbit &nbsp;&middot;&nbsp; Scroll to zoom</div>
+  <div id="loading">Loading model&hellip;</div>
+
+  <!-- Parameter panel (slides in from right on artery selection) -->
+  <div id="panel">
+    <div id="panel-title"></div>
+
+    <div class="slider-row">
+      <div class="slider-label">
+        <span>Diameter</span>
+        <span class="slider-val" id="val-diameter"></span>
+      </div>
+      <input type="range" id="sl-diameter" min="0.005" max="0.10" step="0.001"/>
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-label">
+        <span>Length</span>
+        <span class="slider-val" id="val-length"></span>
+      </div>
+      <input type="range" id="sl-length" min="0.05" max="1" step="0.01"/>
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-label">
+        <span>Z Position</span>
+        <span class="slider-val" id="val-zpos"></span>
+      </div>
+      <input type="range" id="sl-zpos" min="-0.5" max="0.5" step="0.01"/>
+    </div>
+
+    <button id="close-panel">Deselect</button>
+  </div>
+
+  <!-- Hamburger & dropdown menu -->
+  <div id="hamburger" title="Menu">
+    <svg width="18" height="13" viewBox="0 0 18 13" fill="none">
+      <rect width="18" height="2" rx="1" fill="#ccc"/>
+      <rect y="5.5" width="18" height="2" rx="1" fill="#ccc"/>
+      <rect y="11" width="18" height="2" rx="1" fill="#ccc"/>
+    </svg>
+  </div>
+  <div id="menu">
+    <div class="menu-item" id="btn-reset">Reset View</div>
+    <div class="menu-item" id="btn-about">About</div>
+  </div>
+
+  <!-- About modal -->
+  <div id="modal-overlay">
+    <div id="modal">
+      <h2>About</h2>
+      <p>Interactive 3D visualization of facial arteries overlaid on a translucent nose &amp; mouth mesh.</p>
+      <p>Select an artery to adjust its <strong style="color:#ddd">diameter</strong>, <strong style="color:#ddd">length</strong> (grows from center outward), and <strong style="color:#ddd">Z position</strong> (depth offset).</p>
+      <p style="color:#555;">Built with Three.js r128 &nbsp;&middot;&nbsp; Vanilla JS</p>
+      <button id="close-modal">Close</button>
+    </div>
+  </div>
+
+  <!-- Three.js r128 + loaders (non-module build) -->
+  <script src="https://cdn.jsdelivr.net/npm/fflate@0.6.9/umd/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
