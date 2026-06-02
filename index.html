@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Facial Artery Viewer</title>
+  <title>Facial Artery Viewer v1.2</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -25,6 +25,12 @@
       pointer-events: none;
       user-select: none;
     }
+    #title .version {
+      font-size: 11px; font-weight: 400;
+      color: #666;
+      margin-left: 6px;
+      letter-spacing: 0.04em;
+    }
 
     #hint {
       position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -37,13 +43,13 @@
       position: fixed; top: 50%; left: 50%;
       transform: translate(-50%, -50%);
       font-size: 14px; color: #777;
-      pointer-events: none;
+      pointer-events: none; text-align: center; line-height: 1.6;
     }
 
     /* ── Parameter Panel ── */
     #panel {
-      position: fixed; right: -300px; top: 50%; transform: translateY(-50%);
-      width: 270px;
+      position: fixed; right: -320px; top: 50%; transform: translateY(-50%);
+      width: 296px;
       background: rgba(20, 20, 20, 0.93);
       backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,0.07);
@@ -62,17 +68,36 @@
       letter-spacing: 0.08em;
     }
 
-    .slider-row { margin-bottom: 18px; }
+    .slider-row { margin-bottom: 20px; }
+
     .slider-label {
       display: flex; justify-content: space-between; align-items: baseline;
       font-size: 12px; color: #888;
-      margin-bottom: 7px;
+      margin-bottom: 6px;
     }
     .slider-val {
       color: #ddd;
       font-variant-numeric: tabular-nums;
       font-size: 12px;
     }
+
+    /* Slider track row: [−Xmm] [====thumb====] [+Xmm] */
+    .slider-track {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .slider-track input[type=range] { flex: 1; min-width: 0; }
+
+    .range-tag {
+      font-size: 10px;
+      color: #555;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      min-width: 36px;
+    }
+    .range-tag.lo { text-align: right; }
+    .range-tag.hi { text-align: left; }
 
     input[type=range] {
       width: 100%; height: 4px;
@@ -98,7 +123,7 @@
     }
 
     #close-panel {
-      margin-top: 4px; width: 100%;
+      margin-top: 6px; width: 100%;
       background: rgba(255,255,255,0.06);
       border: 1px solid rgba(255,255,255,0.10);
       color: #bbb; border-radius: 6px;
@@ -175,36 +200,51 @@
 </head>
 <body>
 
-  <div id="title">Facial Artery Viewer</div>
+  <div id="title">Facial Artery Viewer<span class="version">v1.2</span></div>
   <div id="hint">Click an artery to inspect &nbsp;&middot;&nbsp; Drag to orbit &nbsp;&middot;&nbsp; Scroll to zoom</div>
   <div id="loading">Loading model&hellip;</div>
 
-  <!-- Parameter panel (slides in from right on artery selection) -->
+  <!-- Parameter panel -->
   <div id="panel">
     <div id="panel-title"></div>
 
+    <!-- Diameter -->
     <div class="slider-row">
       <div class="slider-label">
         <span>Diameter</span>
         <span class="slider-val" id="val-diameter"></span>
       </div>
-      <input type="range" id="sl-diameter" min="0.005" max="0.10" step="0.001"/>
+      <div class="slider-track">
+        <span class="range-tag lo" id="sl-diameter-lo"></span>
+        <input type="range" id="sl-diameter" min="0.005" max="0.10" step="0.001"/>
+        <span class="range-tag hi" id="sl-diameter-hi"></span>
+      </div>
     </div>
 
+    <!-- Length -->
     <div class="slider-row">
       <div class="slider-label">
         <span>Length</span>
         <span class="slider-val" id="val-length"></span>
       </div>
-      <input type="range" id="sl-length" min="0.05" max="1" step="0.01"/>
+      <div class="slider-track">
+        <span class="range-tag lo" id="sl-length-lo"></span>
+        <input type="range" id="sl-length" min="0" max="20" step="0.1"/>
+        <span class="range-tag hi" id="sl-length-hi"></span>
+      </div>
     </div>
 
+    <!-- Z Position -->
     <div class="slider-row">
       <div class="slider-label">
         <span>Z Position</span>
         <span class="slider-val" id="val-zpos"></span>
       </div>
-      <input type="range" id="sl-zpos" min="-0.5" max="0.5" step="0.01"/>
+      <div class="slider-track">
+        <span class="range-tag lo" id="sl-zpos-lo"></span>
+        <input type="range" id="sl-zpos" min="-0.5" max="0.5" step="0.01"/>
+        <span class="range-tag hi" id="sl-zpos-hi"></span>
+      </div>
     </div>
 
     <button id="close-panel">Deselect</button>
@@ -228,13 +268,12 @@
     <div id="modal">
       <h2>About</h2>
       <p>Interactive 3D visualization of facial arteries overlaid on a translucent nose &amp; mouth mesh.</p>
-      <p>Select an artery to adjust its <strong style="color:#ddd">diameter</strong>, <strong style="color:#ddd">length</strong> (grows from center outward), and <strong style="color:#ddd">Z position</strong> (depth offset).</p>
-      <p style="color:#555;">Built with Three.js r128 &nbsp;&middot;&nbsp; Vanilla JS</p>
+      <p>Select an artery to adjust its <strong style="color:#ddd">diameter</strong>, <strong style="color:#ddd">length</strong> (grows from center outward), and <strong style="color:#ddd">Z position</strong> (depth offset). Range labels show ± adjustable extent from the anatomical default.</p>
+      <p style="color:#555;">Built with Three.js r128 &nbsp;&middot;&nbsp; Vanilla JS &nbsp;&middot;&nbsp; v1.2</p>
       <button id="close-modal">Close</button>
     </div>
   </div>
 
-  <!-- Three.js r128 + loaders (non-module build) -->
   <script src="https://cdn.jsdelivr.net/npm/fflate@0.6.9/umd/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>

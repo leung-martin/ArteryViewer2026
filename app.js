@@ -342,10 +342,31 @@ const valDiam    = document.getElementById('val-diameter');
 const valLen     = document.getElementById('val-length');
 const valZ       = document.getElementById('val-zpos');
 
+// Populate the ±range tags flanking each slider.
+// Length uses VESSEL_DATA range; diameter and zPos use slider min/max vs default.
+function setRangeTags(def) {
+  // Length
+  const lenP     = vp(def.id, 1);
+  const lenRange = lenP && lenP.range ? lenP.range : 0;
+  document.getElementById('sl-length-lo').textContent = `−${lenRange.toFixed(1)} mm`;
+  document.getElementById('sl-length-hi').textContent = `+${lenRange.toFixed(1)} mm`;
+
+  // Diameter — show delta from current default to each end of the slider
+  const dDef = def.params.diameter;
+  const dLo  = (dDef - +slDiameter.min).toFixed(3);
+  const dHi  = (+slDiameter.max - dDef).toFixed(3);
+  document.getElementById('sl-diameter-lo').textContent = `−${dLo}`;
+  document.getElementById('sl-diameter-hi').textContent = `+${dHi}`;
+
+  // Z Position — symmetric, fixed range
+  document.getElementById('sl-zpos-lo').textContent = '−0.50';
+  document.getElementById('sl-zpos-hi').textContent = '+0.50';
+}
+
 function showPanel(def) {
   panelTitle.textContent = def.name;
 
-  // Configure length slider from VESSEL_DATA for this artery
+  // Configure length slider bounds from VESSEL_DATA
   const cfg = lengthSliderConfig(def.id);
   slLength.min   = cfg.min;
   slLength.max   = cfg.max;
@@ -355,6 +376,7 @@ function showPanel(def) {
   slDiameter.value = def.params.diameter;
   slZPos.value     = def.params.zPos;
 
+  setRangeTags(def);
   syncLabels(def);
   panel.classList.add('open');
 }
