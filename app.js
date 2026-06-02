@@ -228,29 +228,33 @@ function buildAllArteries() {
 }
 
 // ── FBX Loading ────────────────────────────────────────────────────────────
-const FBX_PATH  = './narizBoca.fbx';
-const loadingEl = document.getElementById('loading');
+const MODEL_PATH = './human_head.glb';
+const loadingEl  = document.getElementById('loading');
 
-const fbxLoader = new THREE.FBXLoader();
-fbxLoader.load(
-  FBX_PATH,
-  fbx => {
+const gltfLoader = new THREE.GLTFLoader();
+gltfLoader.load(
+  MODEL_PATH,
+  gltf => {
     loadingEl.style.display = 'none';
 
-    const box = new THREE.Box3().setFromObject(fbx);
+    const model = gltf.scene;
+
+    // Centre and normalise: scale so the longest dimension is 2 units
+    const box = new THREE.Box3().setFromObject(model);
     const ctr = new THREE.Vector3();
     box.getCenter(ctr);
     const sz  = new THREE.Vector3();
     box.getSize(sz);
     const s   = 2 / Math.max(sz.x, sz.y, sz.z);
 
-    fbx.scale.setScalar(s);
-    fbx.position.set(-ctr.x * s, -ctr.y * s, -ctr.z * s);
+    model.scale.setScalar(s);
+    model.position.set(-ctr.x * s, -ctr.y * s, -ctr.z * s);
 
-    fbx.traverse(child => {
+    // Translucent light-grey material; depthWrite:false lets arteries show through
+    model.traverse(child => {
       if (!child.isMesh) return;
       child.material = new THREE.MeshPhongMaterial({
-        color:       0xd4cdc8,
+        color:      0xd4cdc8,
         transparent: true,
         opacity:     0.28,
         side:        THREE.DoubleSide,
@@ -260,7 +264,7 @@ fbxLoader.load(
       child.renderOrder = 0;
     });
 
-    scene.add(fbx);
+    scene.add(model);
     buildAllArteries();
   },
   xhr => {
@@ -268,10 +272,10 @@ fbxLoader.load(
       loadingEl.textContent = `Loading… ${Math.round(xhr.loaded / xhr.total * 100)}%`;
   },
   err => {
-    console.error('FBX load error:', err);
+    console.error('GLB load error:', err);
     loadingEl.innerHTML =
       'Model unavailable locally — arteries shown.<br>' +
-      '<span style="font-size:11px;color:#555">FBX loads correctly on GitHub Pages (HTTP).</span>';
+      '<span style="font-size:11px;color:#555">GLB loads correctly on GitHub Pages (HTTP).</span>';
     buildAllArteries();
   }
 );
