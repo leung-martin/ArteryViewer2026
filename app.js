@@ -43,6 +43,17 @@ controls.maxDistance    = 15;
 const INIT_CAM_POS = camera.position.clone();
 const INIT_TARGET  = controls.target.clone();
 
+// ── Anatomical Scale ────────────────────────────────────────────────────────
+// After normalisation the head's longest axis (height ≈ 230 mm) = 2 scene units.
+const MM = 2 / 230; // scene units per millimetre
+
+// Approximate landmark positions on the normalised head.
+// These are best-effort estimates; tune trueValue in VESSEL_DATA to shmoo.
+const ANCHOR = {
+  intercanthal_y: 0.26,  // y of the intercanthal / inner-eye line
+  nose_z:         0.40,  // z of the nose-bridge skin surface
+};
+
 // ── Vessel Data Table ──────────────────────────────────────────────────────
 // Imported directly from anatomical reference spreadsheet.
 //
@@ -125,14 +136,31 @@ const ARTERY_DEFS = [
     id:   'dorsal',
     name: 'Dorsal Nasal Arteries',
     params: {
-      diameter: 0.025,
-      length:   vp('dorsal',  1).displayedValue,  // 7.4 mm
+      diameter: 0.020,
+      length:   vp('dorsal', 1).displayedValue,  // 7.4 mm — arm length
       zPos:     0,
     },
-    branches: [
-      [[-0.04,  0.70, 0.16], [-0.17,  0.43, 0.22], [-0.09,  0.17, 0.28], [-0.05,  0.02, 0.25]],
-      [[ 0.04,  0.70, 0.16], [ 0.17,  0.43, 0.22], [ 0.09,  0.17, 0.28], [ 0.05,  0.02, 0.25]],
-    ],
+    // Build the H-shape from anatomical measurements at call time.
+    // Three branches: horizontal bridge + left arm + right arm.
+    // All VESSEL_DATA distances are in mm; multiply by MM for scene units.
+    getBranches(params) {
+      const rx  = vp('dorsal', 4).displayedValue * MM;  // right arm x: 3.2 mm
+      const lx  = vp('dorsal', 5).displayedValue * MM;  // left arm x:  3.1 mm
+      const dy  = vp('dorsal', 6).displayedValue * MM;  // bridge below intercanthal: 7.2 mm
+      const bh  = vp('dorsal', 7).displayedValue * MM;  // bridge-to-branch descent: 8.5 mm
+      const arm = params.length * MM;                   // arm length in scene units
+      const by  = ANCHOR.intercanthal_y - dy;           // bridge y
+      const bz  = ANCHOR.nose_z + params.zPos;          // bridge z with user offset
+
+      return [
+        // Horizontal bridge connecting both arms at the top
+        [ [-lx, by, bz], [0, by, bz], [rx, by, bz] ],
+        // Left arm — descends from bridge, curving slightly outward then back
+        [ [-lx, by, bz], [-lx - bh * 0.15, by - arm * 0.5, bz], [-lx, by - arm, bz] ],
+        // Right arm — mirror
+        [ [rx,  by, bz], [ rx + bh * 0.15, by - arm * 0.5, bz], [ rx, by - arm, bz] ],
+      ];
+    },
   },
   {
     id:   'lateral',
@@ -143,7 +171,8 @@ const ARTERY_DEFS = [
       zPos:     0,
     },
     branches: [
-      [[-0.27, 0.06, 0.19], [-0.13, 0.10, 0.26], [0, 0.08, 0.30], [0.13, 0.10, 0.26], [0.27, 0.06, 0.19]],
+      // Arc across the alar crease — y ≈ nose-base level, z pushed forward onto face
+      [[-0.13, 0.05, 0.42], [-0.06, 0.07, 0.46], [0, 0.06, 0.47], [0.06, 0.07, 0.46], [0.13, 0.05, 0.42]],
     ],
   },
   {
@@ -155,7 +184,8 @@ const ARTERY_DEFS = [
       zPos:     0,
     },
     branches: [
-      [[-0.39, -0.26, 0.11], [-0.19, -0.18, 0.20], [0, -0.21, 0.23], [0.19, -0.18, 0.20], [0.39, -0.26, 0.11]],
+      // Arc along upper-lip vermilion border — y ≈ upper-lip level, z on face surface
+      [[-0.18, -0.24, 0.38], [-0.09, -0.20, 0.42], [0, -0.21, 0.43], [0.09, -0.20, 0.42], [0.18, -0.24, 0.38]],
     ],
   },
 ];
@@ -206,12 +236,17 @@ function buildArtery(def) {
   }
 
   const { diameter, length, zPos } = def.params;
-  const fraction  = mmToFraction(def.id, length); // mm → internal 0–1
-  const selected  = selectedId === def.id;
-  const group     = new THREE.Group();
+  const selected = selectedId === def.id;
+  const group    = new THREE.Group();
 
-  def.branches.forEach(rawPts => {
-    const curve = makeCurve(rawPts, zPos);
+  // Dynamic arteries (e.g. dorsal) compute branches from params at build time;
+  // zPos is already baked in. Static arteries use a fixed branch array + zPos offset.
+  const branches = def.getBranches ? def.getBranches(def.params) : def.branches;
+  const fraction = def.getBranches ? 1.0 : mmToFraction(def.id, length);
+  const dz       = def.getBranches ? 0   : zPos;
+
+  branches.forEach(rawPts => {
+    const curve = makeCurve(rawPts, dz);
     const geo   = buildTubeGeo(curve, diameter, fraction);
     const mesh  = new THREE.Mesh(geo, makeMat(selected));
     mesh.renderOrder = 1;
