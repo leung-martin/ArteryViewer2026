@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>DNA Shape — Vector Extraction</title>
+<style>
+  body { background: #fff; margin: 0; display: flex; flex-direction: column; align-items: center; padding: 20px; font-family: monospace; }
+  canvas { border: 1px solid #ccc; }
+  .info { margin-top: 16px; font-size: 12px; color: #333; max-width: 900px; }
+  table { border-collapse: collapse; margin-top: 8px; }
+  td, th { border: 1px solid #ccc; padding: 4px 10px; font-size: 11px; }
+  th { background: #f0f0f0; }
+</style>
+</head>
+<body>
+<canvas id="c" width="900" height="700"></canvas>
+<div class="info">
+  <b>5-curve DNA extraction</b> — coordinate origin at bridge centre, y+ up, x+ right, arm-length ≈ 1 unit<br>
+  <table>
+    <tr><th>Curve</th><th>P0 (start)</th><th>P1 (control)</th><th>P2 (end)</th></tr>
+    <tr><td>① Left upper arm</td><td>(−0.87, +0.60)</td><td>(−0.52, +0.25)</td><td>(−0.16, 0)</td></tr>
+    <tr><td>② Right upper arm</td><td>(+0.90, +0.60)</td><td>(+0.50, +0.25)</td><td>(+0.16, 0)</td></tr>
+    <tr><td>③ Bridge</td><td>(−0.16, 0)</td><td>(0, −0.12)</td><td>(+0.16, 0)</td></tr>
+    <tr><td>④ Left lower arm</td><td>(−0.16, 0)</td><td>(−0.06, −0.35)</td><td>(−0.12, −0.65)</td></tr>
+    <tr><td>⑤ Right lower arm</td><td>(+0.16, 0)</td><td>(+0.06, −0.35)</td><td>(+0.12, −0.65)</td></tr>
+  </table>
+</div>
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+const W = 900, H = 700;
+
+// Origin at bridge centre
+const OX = W / 2, OY = 320;
+const S = 380; // scale: 1 unit = 380px
+
+function px(x, y) { return [OX + x * S, OY - y * S]; }
+
+function qbez(p0, p1, p2, col, lw) {
+  ctx.beginPath();
+  ctx.moveTo(...px(...p0));
+  ctx.quadraticCurveTo(...px(...p1), ...px(...p2));
+  ctx.strokeStyle = col;
+  ctx.lineWidth = lw;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
+}
+
+function dot(x, y, col, label, dx=6, dy=4) {
+  const [cx, cy] = px(x, y);
+  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2);
+  ctx.fillStyle = col; ctx.fill();
+  ctx.fillStyle = '#333'; ctx.font = '10px monospace';
+  ctx.fillText(label, cx + dx, cy + dy);
+}
+
+function guideDash(a, b) {
+  ctx.setLineDash([3,4]); ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(...px(...a)); ctx.lineTo(...px(...b)); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+ctx.clearRect(0, 0, W, H);
+
+// Grid
+ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+for (let x = -1.2; x <= 1.2; x += 0.2) {
+  ctx.beginPath(); ctx.moveTo(...px(x, -0.9)); ctx.lineTo(...px(x, 0.8)); ctx.stroke();
+}
+for (let y = -0.8; y <= 0.8; y += 0.2) {
+  ctx.beginPath(); ctx.moveTo(...px(-1.2, y)); ctx.lineTo(...px(1.2, y)); ctx.stroke();
+}
+// Axes
+ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1.5;
+ctx.beginPath(); ctx.moveTo(...px(-1.2, 0)); ctx.lineTo(...px(1.2, 0)); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(...px(0, -0.9)); ctx.lineTo(...px(0, 0.8)); ctx.stroke();
+
+// ── Curve definitions ────────────────────────────────────────────────────────
+const DARK_RED = '#8b0000';
+const curves = [
+  { label:'① Left upper arm',  p0:[-0.87,0.60], p1:[-0.52,0.25], p2:[-0.16,0],   col:'#c00020', lw:8 },
+  { label:'② Right upper arm', p0:[ 0.90,0.60], p1:[ 0.50,0.25], p2:[ 0.16,0],   col:'#c00020', lw:8 },
+  { label:'③ Bridge',           p0:[-0.16,0],    p1:[ 0.00,-0.12],p2:[ 0.16,0],   col:'#c00020', lw:8 },
+  { label:'④ Left lower arm',   p0:[-0.16,0],    p1:[-0.06,-0.35],p2:[-0.12,-0.65],col:'#c00020',lw:8 },
+  { label:'⑤ Right lower arm',  p0:[ 0.16,0],    p1:[ 0.06,-0.35],p2:[ 0.12,-0.65],col:'#c00020',lw:8 },
+];
+
+// Draw all curves as thick dark-red tubes (like reference)
+curves.forEach(({p0,p1,p2,col,lw}) => {
+  // Thick outline
+  qbez(p0,p1,p2,'#5a0000', lw+4);
+  // Main colour
+  qbez(p0,p1,p2, col, lw);
+  // Highlight
+  qbez(p0,p1,p2,'rgba(255,80,80,0.18)', lw-3);
+});
+
+// Control point guides
+curves.forEach(({p0,p1,p2}) => {
+  guideDash(p0,p1); guideDash(p1,p2);
+});
+
+// Labels
+const cols = { up:'#e55', bridge:'#fa0', down:'#5af' };
+curves.forEach(({label,p0,p1,p2},i) => {
+  const lc = i<2?'#e55': i==2?'#fa0':'#5af';
+  dot(...p0, lc, `P0`, -28, 4);
+  dot(...p1, '#888', `P1(ctrl)`, 6, 4);
+  dot(...p2, lc, `P2`, 6, 4);
+  // Curve label at midpoint
+  const [mx, my] = px((p0[0]+p2[0])/2, (p0[1]+p2[1])/2);
+  ctx.fillStyle = lc; ctx.font = 'bold 11px monospace';
+  ctx.fillText(label, mx + (i<2? -10:10), my + (i<2? -12:14));
+});
+
+// Axis labels
+ctx.fillStyle='#999'; ctx.font='10px monospace';
+for (let x = -1.0; x <= 1.0; x += 0.5) {
+  const [cx,cy] = px(x, 0); ctx.fillText(x.toFixed(1), cx-8, cy+14);
+}
+for (let y = -0.5; y <= 0.5; y += 0.5) {
+  const [cx,cy] = px(0, y); ctx.fillText(y.toFixed(1), cx+4, cy+4);
+}
+</script>
+</body>
+</html>

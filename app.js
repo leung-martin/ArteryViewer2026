@@ -140,39 +140,61 @@ const ARTERY_DEFS = [
       length:   vp('dorsal', 1).displayedValue,  // 7.4 mm — arm length
       zPos:     0,
     },
-    // Builds the H-shape dynamically from VESSEL_DATA measurements.
-    // Returns [{pts, fraction}] — bridge is always fully shown (fraction:1);
-    // arms use mmToFraction so the length slider grows them from their midpoint.
+    // 5-curve M/W shape confirmed from reference image.
+    // ①② Upper arms: inner canthal area → bridge (fixed, always shown).
+    // ③   Bridge: V-dip, depth = ID7 (8.5 mm).
+    // ④⑤  Lower arms: inward-inflecting from bridge, length slider-driven.
     getBranches(params) {
-      const rx = vp('dorsal', 4).displayedValue * MM;  // right bridge end: 3.2 mm
-      const lx = vp('dorsal', 5).displayedValue * MM;  // left bridge end:  3.1 mm
-      const dy = vp('dorsal', 6).displayedValue * MM;  // bridge below intercanthal: 7.2 mm
-      const by = ANCHOR.intercanthal_y - dy;            // bridge y  (~0.097)
-      const bz = ANCHOR.nose_z + params.zPos;           // bridge z with offset
+      const rx  = vp('dorsal', 4).displayedValue * MM;  // bridge right x: 3.2 mm
+      const lx  = vp('dorsal', 5).displayedValue * MM;  // bridge left x:  3.1 mm
+      const dy  = vp('dorsal', 6).displayedValue * MM;  // below intercanthal: 7.2 mm
+      const bh  = vp('dorsal', 7).displayedValue * MM;  // bridge V-dip: 8.5 mm
+      const oz  = params.zPos;
 
-      // Arms run from bridge ends down to alar base, widening and coming forward.
-      // These endpoints define the FULL course of the artery (bridge → alar).
-      // The length slider (mmToFraction) controls what fraction is visible.
-      const armFrac = mmToFraction('dorsal', params.length);
+      const by  = ANCHOR.intercanthal_y - dy;   // bridge y ≈ 0.187
+      const bz  = ANCHOR.nose_z + oz;
 
-      const oz = params.zPos;
+      // ③ Bridge V-dip control point:
+      //    Q-Bézier midpoint y = 0.5*by + 0.5*ctrl = by − bh  →  ctrl = by − 2*bh
+      const bridgeCtrlY = by - 2 * bh;
+
+      // ①② Upper arm origin: inner canthal area (~13 mm lateral, at intercanthal y)
+      //    z is pulled forward so tips sit on the face surface near the inner eye corner
+      const cthX = 0.115;
+      const cthY = ANCHOR.intercanthal_y;
+      const cthZ = ANCHOR.nose_z - 0.03 + oz;  // close to nose bridge z, inner-eye level
+
+      // Control point: smooth inward sweep toward bridge
+      const ucX = (cthX + rx)  * 0.52;
+      const ucY = (cthY + by)  * 0.52;
+      const ucZ = ANCHOR.nose_z + 0.01 + oz;
+
+      // ④⑤ Lower arm: inward-inflecting (2D-confirmed ratios mid=37.5%, end=75% of bridge x)
+      const armFrac   = mmToFraction('dorsal', params.length);
+      const armLen    = params.length * MM;
+      const lMidX     = rx * 0.375;
+      const lEndX     = rx * 0.75;
+      const lMidY     = by - armLen * 0.54;
+      const lEndY     = by - armLen;
+      const lMidZ     = ANCHOR.nose_z + 0.05 + oz;
+      const lEndZ     = ANCHOR.nose_z + 0.08 + oz;
+
       return [
-        // ── Horizontal bridge at nasion — always fully shown ──
-        { pts: [ [-lx, by, bz], [0, by, bz], [rx, by, bz] ], fraction: 1.0 },
-
-        // ── Left arm: follows nose dorsal ridge, grows from bridge downward ──
-        { pts: [
-            [-lx,    by,     bz          ],
-            [-0.042, 0.038,  0.420 + oz ],
-            [-0.054, -0.082, 0.445 + oz ],
-          ], fraction: armFrac, growFrom: 'start' },
-
-        // ── Right arm: mirror ──
-        { pts: [
-            [ rx,    by,     bz          ],
-            [ 0.044, 0.038,  0.420 + oz ],
-            [ 0.057, -0.082, 0.445 + oz ],
-          ], fraction: armFrac, growFrom: 'start' },
+        // ① Left upper arm: inner canthal → bridge left end
+        { pts: [[-cthX, cthY, cthZ], [-ucX, ucY, ucZ], [-lx, by, bz]],
+          fraction: 1.0 },
+        // ② Right upper arm: mirror
+        { pts: [[ cthX, cthY, cthZ], [ ucX, ucY, ucZ], [ rx, by, bz]],
+          fraction: 1.0 },
+        // ③ Bridge: V-dip, depth driven by ID7 (8.5 mm)
+        { pts: [[-lx, by, bz], [0, bridgeCtrlY, bz], [rx, by, bz]],
+          fraction: 1.0 },
+        // ④ Left lower arm: inward-inflecting, grows from bridge downward
+        { pts: [[-lx, by, bz], [-lMidX, lMidY, lMidZ], [-lEndX, lEndY, lEndZ]],
+          fraction: armFrac, growFrom: 'start' },
+        // ⑤ Right lower arm: mirror
+        { pts: [[ rx, by, bz], [ lMidX, lMidY, lMidZ], [ lEndX, lEndY, lEndZ]],
+          fraction: armFrac, growFrom: 'start' },
       ];
     },
   },
