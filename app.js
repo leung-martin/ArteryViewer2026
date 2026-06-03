@@ -136,7 +136,7 @@ const ARTERY_DEFS = [
     id:   'dorsal',
     name: 'Dorsal Nasal Arteries',
     params: {
-      diameter: 0.020,
+      diameter: 0.025,
       length:   vp('dorsal', 1).displayedValue,  // 7.4 mm — arm length
       zPos:     0,
     },
@@ -160,19 +160,19 @@ const ARTERY_DEFS = [
         // ── Horizontal bridge at nasion — always fully shown ──
         { pts: [ [-lx, by, bz], [0, by, bz], [rx, by, bz] ], fraction: 1.0 },
 
-        // ── Left arm: descends from bridge, widens to alar base ──
+        // ── Left arm: follows nose dorsal ridge, grows from bridge downward ──
         { pts: [
-            [-lx,    by,     bz          ],  // bridge end
-            [-0.055, 0.040,  0.435 + oz ],  // mid: nose sidewall, pushed onto surface
-            [-0.088, -0.115, 0.458 + oz ],  // end: alar base
-          ], fraction: armFrac },
+            [-lx,    by,     bz          ],
+            [-0.042, 0.038,  0.420 + oz ],
+            [-0.054, -0.082, 0.445 + oz ],
+          ], fraction: armFrac, growFrom: 'start' },
 
         // ── Right arm: mirror ──
         { pts: [
             [ rx,    by,     bz          ],
-            [ 0.058, 0.040,  0.435 + oz ],
-            [ 0.092, -0.115, 0.458 + oz ],
-          ], fraction: armFrac },
+            [ 0.044, 0.038,  0.420 + oz ],
+            [ 0.057, -0.082, 0.445 + oz ],
+          ], fraction: armFrac, growFrom: 'start' },
       ];
     },
   },
@@ -218,11 +218,19 @@ function makeCurve(rawPts, dz) {
   );
 }
 
-// Shows the central `fraction` of the curve, growing symmetrically from midpoint.
-function buildTubeGeo(curve, diameter, fraction) {
+// Builds a tube showing `fraction` of `curve`.
+// growFrom='center' (default): grows symmetrically from midpoint (for arcs).
+// growFrom='start': grows from t=0 downward (for arms anchored at bridge).
+function buildTubeGeo(curve, diameter, fraction, growFrom = 'center') {
   const SEG = 64;
-  const tA  = Math.max(0, 0.5 - fraction / 2);
-  const tB  = Math.min(1, 0.5 + fraction / 2);
+  let tA, tB;
+  if (growFrom === 'start') {
+    tA = 0;
+    tB = Math.min(1, fraction);
+  } else {
+    tA = Math.max(0, 0.5 - fraction / 2);
+    tB = Math.min(1, 0.5 + fraction / 2);
+  }
   const pts = [];
   for (let i = 0; i <= SEG; i++) {
     pts.push(curve.getPoint(tA + (tB - tA) * (i / SEG)));
@@ -258,9 +266,9 @@ function buildArtery(def) {
   if (def.getBranches) {
     // ── Dynamic artery: getBranches returns [{pts, fraction?}] ──────────────
     // zPos and fractions are already computed inside getBranches.
-    def.getBranches(def.params).forEach(({ pts, fraction }) => {
+    def.getBranches(def.params).forEach(({ pts, fraction, growFrom }) => {
       const curve = makeCurve(pts, 0);
-      const geo   = buildTubeGeo(curve, diameter, fraction);
+      const geo   = buildTubeGeo(curve, diameter, fraction, growFrom);
       const mesh  = new THREE.Mesh(geo, makeMat(selected));
       mesh.renderOrder = 1;
       group.add(mesh);
@@ -326,6 +334,7 @@ gltfLoader.load(
 
     scene.add(model);
     buildAllArteries();
+    selectArtery('dorsal');
   },
   xhr => {
     if (xhr.total)
@@ -337,6 +346,7 @@ gltfLoader.load(
       'Model unavailable locally — arteries shown.<br>' +
       '<span style="font-size:11px;color:#555">GLB loads correctly on GitHub Pages (HTTP).</span>';
     buildAllArteries();
+    selectArtery('dorsal');
   }
 );
 
