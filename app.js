@@ -50,8 +50,8 @@ const MM = 2 / 230; // scene units per millimetre
 // Approximate landmark positions on the normalised head.
 // These are best-effort estimates; tune trueValue in VESSEL_DATA to shmoo.
 const ANCHOR = {
-  intercanthal_y: 0.26,  // y of the intercanthal / inner-eye line
-  nose_z:         0.40,  // z of the nose-bridge skin surface
+  intercanthal_y: 0.16,  // y of the intercanthal / inner-eye line
+  nose_z:         0.37,  // z of the nose-bridge skin surface
 };
 
 // ── Vessel Data Table ──────────────────────────────────────────────────────
@@ -140,25 +140,38 @@ const ARTERY_DEFS = [
       length:   vp('dorsal', 1).displayedValue,  // 7.4 mm — arm length
       zPos:     0,
     },
-    // Build the H-shape from anatomical measurements at call time.
-    // Three branches: horizontal bridge + left arm + right arm.
-    // All VESSEL_DATA distances are in mm; multiply by MM for scene units.
+    // Builds the H-shape dynamically from VESSEL_DATA measurements.
+    // Returns [{pts, fraction}] — bridge is always fully shown (fraction:1);
+    // arms use mmToFraction so the length slider grows them from their midpoint.
     getBranches(params) {
-      const rx  = vp('dorsal', 4).displayedValue * MM;  // right arm x: 3.2 mm
-      const lx  = vp('dorsal', 5).displayedValue * MM;  // left arm x:  3.1 mm
-      const dy  = vp('dorsal', 6).displayedValue * MM;  // bridge below intercanthal: 7.2 mm
-      const bh  = vp('dorsal', 7).displayedValue * MM;  // bridge-to-branch descent: 8.5 mm
-      const arm = params.length * MM;                   // arm length in scene units
-      const by  = ANCHOR.intercanthal_y - dy;           // bridge y
-      const bz  = ANCHOR.nose_z + params.zPos;          // bridge z with user offset
+      const rx = vp('dorsal', 4).displayedValue * MM;  // right bridge end: 3.2 mm
+      const lx = vp('dorsal', 5).displayedValue * MM;  // left bridge end:  3.1 mm
+      const dy = vp('dorsal', 6).displayedValue * MM;  // bridge below intercanthal: 7.2 mm
+      const by = ANCHOR.intercanthal_y - dy;            // bridge y  (~0.097)
+      const bz = ANCHOR.nose_z + params.zPos;           // bridge z with offset
+
+      // Arms run from bridge ends down to alar base, widening and coming forward.
+      // These endpoints define the FULL course of the artery (bridge → alar).
+      // The length slider (mmToFraction) controls what fraction is visible.
+      const armFrac = mmToFraction('dorsal', params.length);
 
       return [
-        // Horizontal bridge connecting both arms at the top
-        [ [-lx, by, bz], [0, by, bz], [rx, by, bz] ],
-        // Left arm — descends from bridge, curving slightly outward then back
-        [ [-lx, by, bz], [-lx - bh * 0.15, by - arm * 0.5, bz], [-lx, by - arm, bz] ],
-        // Right arm — mirror
-        [ [rx,  by, bz], [ rx + bh * 0.15, by - arm * 0.5, bz], [ rx, by - arm, bz] ],
+        // ── Horizontal bridge at nasion — always fully shown ──
+        { pts: [ [-lx, by, bz], [0, by, bz*0.99], [rx, by, bz] ], fraction: 1.0 },
+
+        // ── Left arm: bridge end → alar base (follows nose contour) ──
+        { pts: [
+            [-lx,   by,    bz       ],   // start at bridge
+            [-0.038, 0.015, 0.42 + params.zPos],   // mid: nose widens & comes forward
+            [-0.055, -0.07, 0.46 + params.zPos],   // end: alar base
+          ], fraction: armFrac },
+
+        // ── Right arm: mirror ──
+        { pts: [
+            [ rx,    by,    bz       ],
+            [ 0.040, 0.015, 0.42 + params.zPos],
+            [ 0.057, -0.07, 0.46 + params.zPos],
+          ], fraction: armFrac },
       ];
     },
   },
@@ -171,8 +184,9 @@ const ARTERY_DEFS = [
       zPos:     0,
     },
     branches: [
-      // Arc across the alar crease — y ≈ nose-base level, z pushed forward onto face
-      [[-0.13, 0.05, 0.42], [-0.06, 0.07, 0.46], [0, 0.06, 0.47], [0.06, 0.07, 0.46], [0.13, 0.05, 0.42]],
+      // Hugs the alar crease — sits at the curve where nose meets cheek, each side
+      [[-0.055, -0.05, 0.44], [-0.040, -0.04, 0.46], [-0.025, -0.06, 0.45], [-0.010, -0.07, 0.45]],
+      [[ 0.010, -0.07, 0.45], [ 0.025, -0.06, 0.45], [ 0.040, -0.04, 0.46], [ 0.055, -0.05, 0.44]],
     ],
   },
   {
@@ -184,8 +198,8 @@ const ARTERY_DEFS = [
       zPos:     0,
     },
     branches: [
-      // Arc along upper-lip vermilion border — y ≈ upper-lip level, z on face surface
-      [[-0.18, -0.24, 0.38], [-0.09, -0.20, 0.42], [0, -0.21, 0.43], [0.09, -0.20, 0.42], [0.18, -0.24, 0.38]],
+      // Arc tracing the upper-lip vermilion border — wide, follows Cupid's bow
+      [[-0.16, -0.255, 0.40], [-0.08, -0.220, 0.43], [0, -0.230, 0.44], [0.08, -0.220, 0.43], [0.16, -0.255, 0.40]],
     ],
   },
 ];
@@ -239,20 +253,29 @@ function buildArtery(def) {
   const selected = selectedId === def.id;
   const group    = new THREE.Group();
 
-  // Dynamic arteries (e.g. dorsal) compute branches from params at build time;
-  // zPos is already baked in. Static arteries use a fixed branch array + zPos offset.
-  const branches = def.getBranches ? def.getBranches(def.params) : def.branches;
-  const fraction = def.getBranches ? 1.0 : mmToFraction(def.id, length);
-  const dz       = def.getBranches ? 0   : zPos;
-
-  branches.forEach(rawPts => {
-    const curve = makeCurve(rawPts, dz);
-    const geo   = buildTubeGeo(curve, diameter, fraction);
-    const mesh  = new THREE.Mesh(geo, makeMat(selected));
-    mesh.renderOrder = 1;
-    group.add(mesh);
-    meshToId.set(mesh, def.id);
-  });
+  if (def.getBranches) {
+    // ── Dynamic artery: getBranches returns [{pts, fraction?}] ──────────────
+    // zPos and fractions are already computed inside getBranches.
+    def.getBranches(def.params).forEach(({ pts, fraction }) => {
+      const curve = makeCurve(pts, 0);
+      const geo   = buildTubeGeo(curve, diameter, fraction);
+      const mesh  = new THREE.Mesh(geo, makeMat(selected));
+      mesh.renderOrder = 1;
+      group.add(mesh);
+      meshToId.set(mesh, def.id);
+    });
+  } else {
+    // ── Static artery: branches is a plain array of point arrays ────────────
+    const fraction = mmToFraction(def.id, length);
+    def.branches.forEach(rawPts => {
+      const curve = makeCurve(rawPts, zPos);
+      const geo   = buildTubeGeo(curve, diameter, fraction);
+      const mesh  = new THREE.Mesh(geo, makeMat(selected));
+      mesh.renderOrder = 1;
+      group.add(mesh);
+      meshToId.set(mesh, def.id);
+    });
+  }
 
   scene.add(group);
   arteryGroups[def.id] = group;
