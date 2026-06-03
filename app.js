@@ -137,18 +137,22 @@ const ARTERY_DEFS = [
     name: 'Dorsal Nasal Arteries',
     params: {
       diameter: 0.025,
-      length:   vp('dorsal', 1).displayedValue,  // 7.4 mm — arm length
       zPos:     0,
+      id1: vp('dorsal', 1).displayedValue,  // length: 7.4 mm
+      id4: vp('dorsal', 4).displayedValue,  // right to midline: 3.2 mm
+      id5: vp('dorsal', 5).displayedValue,  // left to midline: 3.1 mm
+      id6: vp('dorsal', 6).displayedValue,  // to canthal line: 7.2 mm
+      id7: vp('dorsal', 7).displayedValue,  // bridge V-dip: 8.5 mm
     },
     // 5-curve M/W shape confirmed from reference image.
     // ①② Upper arms: inner canthal area → bridge (fixed, always shown).
     // ③   Bridge: V-dip, depth = ID7 (8.5 mm).
     // ④⑤  Lower arms: inward-inflecting from bridge, length slider-driven.
     getBranches(params) {
-      const rx  = vp('dorsal', 4).displayedValue * MM;  // bridge right x: 3.2 mm
-      const lx  = vp('dorsal', 5).displayedValue * MM;  // bridge left x:  3.1 mm
-      const dy  = vp('dorsal', 6).displayedValue * MM;  // below intercanthal: 7.2 mm
-      const bh  = vp('dorsal', 7).displayedValue * MM;  // bridge V-dip: 8.5 mm
+      const rx  = (params.id4 ?? vp('dorsal', 4).displayedValue) * MM;
+      const lx  = (params.id5 ?? vp('dorsal', 5).displayedValue) * MM;
+      const dy  = (params.id6 ?? vp('dorsal', 6).displayedValue) * MM;
+      const bh  = (params.id7 ?? vp('dorsal', 7).displayedValue) * MM;
       const oz  = params.zPos;
 
       const by  = ANCHOR.intercanthal_y - dy;   // bridge y ≈ 0.187
@@ -170,8 +174,9 @@ const ARTERY_DEFS = [
       const ucZ = ANCHOR.nose_z + 0.01 + oz;
 
       // ④⑤ Lower arm: inward-inflecting (2D-confirmed ratios mid=37.5%, end=75% of bridge x)
-      const armFrac   = mmToFraction('dorsal', params.length);
-      const armLen    = params.length * MM;
+      const armMm     = params.id1 ?? params.length ?? vp('dorsal', 1).displayedValue;
+      const armFrac   = mmToFraction('dorsal', armMm);
+      const armLen    = armMm * MM;
       const lMidX     = rx * 0.375;
       const lEndX     = rx * 0.75;
       const lMidY     = by - armLen * 0.54;
@@ -203,8 +208,13 @@ const ARTERY_DEFS = [
     name: 'Lateral Nasal Artery',
     params: {
       diameter: 0.022,
-      length:   vp('lateral', 1).displayedValue,  // 10.6 mm
       zPos:     0,
+      id1: vp('lateral', 1).displayedValue,  // length: 10.6 mm
+      id2: vp('lateral', 2).displayedValue,  // distance to oral commissure: 10.0 mm
+      id3: vp('lateral', 3).displayedValue,  // width overall: 1.23 mm
+      id4: vp('lateral', 4).displayedValue,  // width right: 1.55 mm
+      id5: vp('lateral', 5).displayedValue,  // width left: 1.43 mm
+      id6: vp('lateral', 6).displayedValue,  // starting point from alar base: 1.15 mm
     },
     branches: [
       // Right alar crease — wraps along nose-cheek groove at nostril level
@@ -218,8 +228,14 @@ const ARTERY_DEFS = [
     name: 'Superior Labial Artery',
     params: {
       diameter: 0.025,
-      length:   vp('labial',  1).displayedValue,  // 21.0 mm
       zPos:     0,
+      id1: vp('labial', 1).displayedValue,  // length: 21.0 mm
+      id4: vp('labial', 4).displayedValue,  // width at midline: 1.1 mm
+      id5: vp('labial', 5).displayedValue,  // width at labial commissure: 1.65 mm
+      id6: vp('labial', 6).displayedValue,  // width tapering: 1.36 mm
+      id7: vp('labial', 7).displayedValue,  // depth at cheilion: 5.3 mm
+      id8: vp('labial', 8).displayedValue,  // depth at cupid's bow peak: 3.8 mm
+      id9: vp('labial', 9).displayedValue,  // depth at cupid's bow midline: 3.3 mm
     },
     branches: [
       // Upper-lip vermilion border — Cupid's bow, pushed forward onto lip surface
@@ -298,7 +314,8 @@ function buildArtery(def) {
     });
   } else {
     // ── Static artery: branches is a plain array of point arrays ────────────
-    const fraction = mmToFraction(def.id, length);
+    const lengthMm = def.params.id1 ?? length;
+    const fraction = mmToFraction(def.id, lengthMm);
     def.branches.forEach(rawPts => {
       const curve = makeCurve(rawPts, zPos);
       const geo   = buildTubeGeo(curve, diameter, fraction);
@@ -429,82 +446,99 @@ function deselectArtery() {
 }
 
 // ── Parameter Panel ────────────────────────────────────────────────────────
-const panel      = document.getElementById('panel');
-const panelTitle = document.getElementById('panel-title');
-const slDiameter = document.getElementById('sl-diameter');
-const slLength   = document.getElementById('sl-length');
-const slZPos     = document.getElementById('sl-zpos');
-const valDiam    = document.getElementById('val-diameter');
-const valLen     = document.getElementById('val-length');
-const valZ       = document.getElementById('val-zpos');
+const panel           = document.getElementById('panel');
+const panelTitle      = document.getElementById('panel-title');
+const sliderContainer = document.getElementById('slider-container');
+
+// Truncate long label text to fit the slider row
+function trunc(str, n = 25) {
+  return str.length > n ? str.slice(0, n - 1) + '…' : str;
+}
+
+// Build HTML for one slider row (used for both VESSEL_DATA params and internal controls)
+function makeSliderRow(key, label, value, min, max, step, unit) {
+  const lo     = (value - min);
+  const hi     = (max  - value);
+  const isMm   = unit === 'mm';
+  const isZPos = key === 'zPos';
+  const dispVal = isMm   ? `${(+value).toFixed(1)} mm`
+                : isZPos ? `${value >= 0 ? '+' : ''}${(+value).toFixed(2)}`
+                :           `${(+value).toFixed(3)}`;
+  const loStr  = isMm   ? `−${lo.toFixed(1)} mm` : `−${Math.abs(lo).toFixed(isZPos ? 2 : 3)}`;
+  const hiStr  = isMm   ? `+${hi.toFixed(1)} mm` : `+${Math.abs(hi).toFixed(isZPos ? 2 : 3)}`;
+
+  return `<div class="slider-row">
+    <div class="slider-label">
+      <span title="${label}">${trunc(label)}</span>
+      <span class="slider-val" id="val-${key}">${dispVal}</span>
+    </div>
+    <div class="slider-track">
+      <span class="range-tag lo">${loStr}</span>
+      <input type="range" id="sl-${key}"
+             data-key="${key}" data-unit="${unit}"
+             min="${min}" max="${max}" step="${step}" value="${value}"/>
+      <span class="range-tag hi">${hiStr}</span>
+    </div>
+  </div>`;
+}
 
 function showPanel(def) {
   panelTitle.textContent = def.name;
+  const rows = [];
 
-  // Length slider — bounds and default from VESSEL_DATA
-  const cfg      = lengthSliderConfig(def.id);
-  slLength.min   = cfg.min;
-  slLength.max   = cfg.max;
-  slLength.step  = 0.1;
-  slLength.value = def.params.length;
+  // ── Modifiable VESSEL_DATA params (in ID order) ──
+  VESSEL_DATA
+    .filter(d => d.vessel === def.id && d.modifiable && d.displayedValue != null && d.range != null)
+    .sort((a, b) => a.id - b.id)
+    .forEach(p => {
+      const key = `id${p.id}`;
+      const val = def.params[key] ?? p.displayedValue;
+      rows.push(makeSliderRow(
+        key, p.desc, val,
+        Math.max(0, p.displayedValue - p.range),
+        p.displayedValue + p.range,
+        0.1, 'mm'
+      ));
+    });
 
-  // Diameter slider
-  slDiameter.min   = 0.005;
-  slDiameter.max   = 0.100;
-  slDiameter.step  = 0.001;
-  slDiameter.value = def.params.diameter;
+  // ── Tube diameter (visual/internal, always shown) ──
+  const d = def.params.diameter;
+  rows.push(makeSliderRow('diameter', 'Tube diameter (visual)', d, 0.005, 0.100, 0.001, ''));
 
-  // Z-position slider
-  slZPos.min   = -0.5;
-  slZPos.max   =  0.5;
-  slZPos.step  =  0.01;
-  slZPos.value = def.params.zPos;
+  // ── Z-depth offset (shmoo, always shown) ──
+  rows.push(makeSliderRow('zPos', 'Z offset (depth)', def.params.zPos, -0.5, 0.5, 0.01, 'zPos'));
 
-  syncRangeTags(def);
-  syncLabels(def);
+  sliderContainer.innerHTML = rows.join('');
+
+  // Bind change handler to every generated slider
+  sliderContainer.querySelectorAll('input[type=range]').forEach(sl => {
+    sl.addEventListener('input', () => onSlider(def, sl.dataset.key, sl.dataset.unit));
+  });
+
   panel.classList.add('open');
 }
 
 function hidePanel() { panel.classList.remove('open'); }
 
-// Set the −X / +X tags that flank each slider.
-function syncRangeTags(def) {
-  // Length: ± comes from VESSEL_DATA range column
-  const lenP  = vp(def.id, 1);
-  const lenR  = lenP && lenP.range ? lenP.range : 0;
-  document.getElementById('sl-length-lo').textContent  = `−${lenR.toFixed(1)} mm`;
-  document.getElementById('sl-length-hi').textContent  = `+${lenR.toFixed(1)} mm`;
+function onSlider(def, key, unit) {
+  const sl  = document.getElementById(`sl-${key}`);
+  if (!sl) return;
+  const val = +sl.value;
 
-  // Diameter: delta from current value to each end of its fixed slider range
-  const d    = def.params.diameter;
-  document.getElementById('sl-diameter-lo').textContent = `−${(d - 0.005).toFixed(3)}`;
-  document.getElementById('sl-diameter-hi').textContent = `+${(0.100 - d).toFixed(3)}`;
+  // Update inline display value
+  const span = document.getElementById(`val-${key}`);
+  if (span) {
+    span.textContent = unit === 'mm'  ? `${val.toFixed(1)} mm`
+                     : key === 'zPos' ? `${val >= 0 ? '+' : ''}${val.toFixed(2)}`
+                     :                   val.toFixed(3);
+  }
 
-  // Z Position: fixed symmetric range
-  document.getElementById('sl-zpos-lo').textContent = '−0.50';
-  document.getElementById('sl-zpos-hi').textContent = '+0.50';
-}
+  // Persist into params
+  def.params[key] = val;
 
-// Display current slider values as plain absolute numbers — no percentages.
-function syncLabels(def) {
-  const p = def.params;
-  valDiam.textContent = p.diameter.toFixed(3);
-  valLen.textContent  = parseFloat(p.length).toFixed(1) + ' mm';
-  valZ.textContent    = (p.zPos >= 0 ? '+' : '') + p.zPos.toFixed(2);
-}
-
-function onSlider() {
-  if (!selectedId) return;
-  const def = ARTERY_DEFS.find(d => d.id === selectedId);
-  def.params.diameter = +slDiameter.value;
-  def.params.length   = +slLength.value;  // mm; converted to 0–1 fraction in buildArtery
-  def.params.zPos     = +slZPos.value;
-  syncRangeTags(def);
-  syncLabels(def);
   buildArtery(def);
 }
 
-[slDiameter, slLength, slZPos].forEach(sl => sl.addEventListener('input', onSlider));
 document.getElementById('close-panel').addEventListener('click', deselectArtery);
 
 // ── Hamburger Menu ─────────────────────────────────────────────────────────

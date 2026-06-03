@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Facial Artery Viewer v1.9</title>
+  <title>Facial Artery Viewer v2.0</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -49,16 +49,27 @@
     /* ── Parameter Panel ── */
     #panel {
       position: fixed; right: -320px; top: 50%; transform: translateY(-50%);
-      width: 296px;
+      width: 300px;
       background: rgba(20, 20, 20, 0.93);
       backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,0.07);
       border-radius: 10px;
-      padding: 22px;
+      padding: 22px 22px 16px;
       transition: right 0.28s cubic-bezier(.4,0,.2,1);
       z-index: 10;
+      max-height: 85vh;
+      display: flex; flex-direction: column;
     }
     #panel.open { right: 18px; }
+
+    #slider-container {
+      overflow-y: auto;
+      flex: 1;
+      padding-right: 4px;
+      margin-right: -4px;
+    }
+    #slider-container::-webkit-scrollbar { width: 4px; }
+    #slider-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
 
     #panel-title {
       font-size: 11px; font-weight: 700;
@@ -200,54 +211,15 @@
 </head>
 <body>
 
-  <div id="title">Facial Artery Viewer<span class="version">v1.9</span></div>
+  <div id="title">Facial Artery Viewer<span class="version">v2.0</span></div>
   <div id="hint">Click an artery to inspect &nbsp;&middot;&nbsp; Drag to orbit &nbsp;&middot;&nbsp; Scroll to zoom</div>
   <div id="loading">Loading model&hellip;</div>
 
-  <!-- Parameter panel -->
+  <!-- Parameter panel — sliders generated dynamically from VESSEL_DATA -->
   <div id="panel">
     <div id="panel-title"></div>
-
-    <!-- Diameter -->
-    <div class="slider-row">
-      <div class="slider-label">
-        <span>Diameter</span>
-        <span class="slider-val" id="val-diameter"></span>
-      </div>
-      <div class="slider-track">
-        <span class="range-tag lo" id="sl-diameter-lo"></span>
-        <input type="range" id="sl-diameter" min="0.005" max="0.10" step="0.001"/>
-        <span class="range-tag hi" id="sl-diameter-hi"></span>
-      </div>
-    </div>
-
-    <!-- Length -->
-    <div class="slider-row">
-      <div class="slider-label">
-        <span>Length</span>
-        <span class="slider-val" id="val-length"></span>
-      </div>
-      <div class="slider-track">
-        <span class="range-tag lo" id="sl-length-lo"></span>
-        <input type="range" id="sl-length" min="0" max="20" step="0.1"/>
-        <span class="range-tag hi" id="sl-length-hi"></span>
-      </div>
-    </div>
-
-    <!-- Z Position -->
-    <div class="slider-row">
-      <div class="slider-label">
-        <span>Z Position</span>
-        <span class="slider-val" id="val-zpos"></span>
-      </div>
-      <div class="slider-track">
-        <span class="range-tag lo" id="sl-zpos-lo"></span>
-        <input type="range" id="sl-zpos" min="-0.5" max="0.5" step="0.01"/>
-        <span class="range-tag hi" id="sl-zpos-hi"></span>
-      </div>
-    </div>
-
-    <button id="close-panel">Deselect</button>
+    <div id="slider-container"></div>
+    <button id="close-panel" style="margin-top:10px;flex-shrink:0;">Deselect</button>
   </div>
 
   <!-- Hamburger & dropdown menu -->
