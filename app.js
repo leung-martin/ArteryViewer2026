@@ -50,7 +50,7 @@ const MM = 2 / 230; // scene units per millimetre
 // Approximate landmark positions on the normalised head.
 // These are best-effort estimates; tune trueValue in VESSEL_DATA to shmoo.
 const ANCHOR = {
-  intercanthal_y: 0.16,  // y of the intercanthal / inner-eye line
+  intercanthal_y: 0.25,  // y of the intercanthal / inner-eye line
   nose_z:         0.37,  // z of the nose-bridge skin surface
 };
 
@@ -155,22 +155,23 @@ const ARTERY_DEFS = [
       // The length slider (mmToFraction) controls what fraction is visible.
       const armFrac = mmToFraction('dorsal', params.length);
 
+      const oz = params.zPos;
       return [
         // ── Horizontal bridge at nasion — always fully shown ──
-        { pts: [ [-lx, by, bz], [0, by, bz*0.99], [rx, by, bz] ], fraction: 1.0 },
+        { pts: [ [-lx, by, bz], [0, by, bz], [rx, by, bz] ], fraction: 1.0 },
 
-        // ── Left arm: bridge end → alar base (follows nose contour) ──
+        // ── Left arm: descends from bridge, widens to alar base ──
         { pts: [
-            [-lx,   by,    bz       ],   // start at bridge
-            [-0.038, 0.015, 0.42 + params.zPos],   // mid: nose widens & comes forward
-            [-0.055, -0.07, 0.46 + params.zPos],   // end: alar base
+            [-lx,    by,     bz          ],  // bridge end
+            [-0.055, 0.040,  0.435 + oz ],  // mid: nose sidewall, pushed onto surface
+            [-0.088, -0.115, 0.458 + oz ],  // end: alar base
           ], fraction: armFrac },
 
         // ── Right arm: mirror ──
         { pts: [
-            [ rx,    by,    bz       ],
-            [ 0.040, 0.015, 0.42 + params.zPos],
-            [ 0.057, -0.07, 0.46 + params.zPos],
+            [ rx,    by,     bz          ],
+            [ 0.058, 0.040,  0.435 + oz ],
+            [ 0.092, -0.115, 0.458 + oz ],
           ], fraction: armFrac },
       ];
     },
@@ -184,9 +185,10 @@ const ARTERY_DEFS = [
       zPos:     0,
     },
     branches: [
-      // Hugs the alar crease — sits at the curve where nose meets cheek, each side
-      [[-0.055, -0.05, 0.44], [-0.040, -0.04, 0.46], [-0.025, -0.06, 0.45], [-0.010, -0.07, 0.45]],
-      [[ 0.010, -0.07, 0.45], [ 0.025, -0.06, 0.45], [ 0.040, -0.04, 0.46], [ 0.055, -0.05, 0.44]],
+      // Right alar crease — wraps along nose-cheek groove at nostril level
+      [[ 0.035, -0.080, 0.458], [ 0.060, -0.098, 0.452], [ 0.085, -0.115, 0.440]],
+      // Left alar crease — mirror
+      [[-0.035, -0.080, 0.458], [-0.060, -0.098, 0.452], [-0.085, -0.115, 0.440]],
     ],
   },
   {
@@ -198,8 +200,8 @@ const ARTERY_DEFS = [
       zPos:     0,
     },
     branches: [
-      // Arc tracing the upper-lip vermilion border — wide, follows Cupid's bow
-      [[-0.16, -0.255, 0.40], [-0.08, -0.220, 0.43], [0, -0.230, 0.44], [0.08, -0.220, 0.43], [0.16, -0.255, 0.40]],
+      // Upper-lip vermilion border — Cupid's bow, pushed forward onto lip surface
+      [[-0.155, -0.295, 0.400], [-0.078, -0.262, 0.428], [0, -0.272, 0.435], [0.078, -0.262, 0.428], [0.155, -0.295, 0.400]],
     ],
   },
 ];
