@@ -242,6 +242,40 @@ const ARTERY_DEFS = [
       [[-0.155, -0.295, 0.400], [-0.078, -0.262, 0.428], [0, -0.272, 0.435], [0.078, -0.262, 0.428], [0.155, -0.295, 0.400]],
     ],
   },
+
+  // ── Angular Vein ─────────────────────────────────────────────────────────
+  // Runs from inner canthal angle down the lateral nose wall to the alar groove.
+  // The angular vein is the terminal segment of the facial vein at the medial eye corner.
+  {
+    id:    'angular',
+    name:  'Angular Vein',
+    type:  'vein',
+    color: 0x3366cc,
+    params: { diameter: 0.015, zPos: 0, id1: 25 },
+    branches: [
+      // Right: medial canthus → nose sidewall mid → alar groove
+      [[ 0.100,  0.225, 0.365], [ 0.068,  0.075, 0.435], [ 0.058, -0.090, 0.455]],
+      // Left: mirror
+      [[-0.100,  0.225, 0.365], [-0.068,  0.075, 0.435], [-0.058, -0.090, 0.455]],
+    ],
+  },
+
+  // ── Facial Vein ───────────────────────────────────────────────────────────
+  // Descends from the angular vein origin, following the nasolabial fold toward
+  // the oral commissure, then sweeps posteriorly to the mandibular border.
+  {
+    id:    'facial',
+    name:  'Facial Vein',
+    type:  'vein',
+    color: 0x2244aa,
+    params: { diameter: 0.019, zPos: 0, id1: 70 },
+    branches: [
+      // Right: canthal origin → nasolabial fold → oral commissure → mandible
+      [[ 0.105,  0.210, 0.360], [ 0.135,  0.030, 0.430], [ 0.162, -0.195, 0.415], [ 0.178, -0.365, 0.335], [ 0.168, -0.490, 0.195]],
+      // Left: mirror
+      [[-0.105,  0.210, 0.360], [-0.135,  0.030, 0.430], [-0.162, -0.195, 0.415], [-0.178, -0.365, 0.335], [-0.168, -0.490, 0.195]],
+    ],
+  },
 ];
 
 // ── Runtime State ──────────────────────────────────────────────────────────
@@ -277,11 +311,11 @@ function buildTubeGeo(curve, diameter, fraction, growFrom = 'center') {
   return new THREE.TubeGeometry(sub, SEG, diameter / 2, 8, false);
 }
 
-function makeMat(selected) {
+function makeMat(selected, baseColor = 0x8b0000) {
   return new THREE.MeshPhongMaterial({
-    color:     selected ? 0x00cc55 : 0x8b0000,
+    color:     selected ? 0x00cc55 : baseColor,
     shininess: selected ? 90 : 50,
-    specular:  selected ? 0x88ffbb : 0x330000,
+    specular:  selected ? 0x88ffbb : 0x110000,
   });
 }
 
@@ -301,13 +335,14 @@ function buildArtery(def) {
   const selected = selectedId === def.id;
   const group    = new THREE.Group();
 
+  const baseColor = def.color ?? 0x8b0000;
+
   if (def.getBranches) {
     // ── Dynamic artery: getBranches returns [{pts, fraction?}] ──────────────
-    // zPos and fractions are already computed inside getBranches.
     def.getBranches(def.params).forEach(({ pts, fraction, growFrom }) => {
       const curve = makeCurve(pts, 0);
       const geo   = buildTubeGeo(curve, diameter, fraction, growFrom);
-      const mesh  = new THREE.Mesh(geo, makeMat(selected));
+      const mesh  = new THREE.Mesh(geo, makeMat(selected, baseColor));
       mesh.renderOrder = 1;
       group.add(mesh);
       meshToId.set(mesh, def.id);
@@ -319,7 +354,7 @@ function buildArtery(def) {
     def.branches.forEach(rawPts => {
       const curve = makeCurve(rawPts, zPos);
       const geo   = buildTubeGeo(curve, diameter, fraction);
-      const mesh  = new THREE.Mesh(geo, makeMat(selected));
+      const mesh  = new THREE.Mesh(geo, makeMat(selected, baseColor));
       mesh.renderOrder = 1;
       group.add(mesh);
       meshToId.set(mesh, def.id);
@@ -372,6 +407,7 @@ gltfLoader.load(
     });
 
     scene.add(model);
+    drawRefLines();
     buildAllArteries();
     selectArtery('dorsal');
   },
@@ -384,6 +420,7 @@ gltfLoader.load(
     loadingEl.innerHTML =
       'Model unavailable locally — arteries shown.<br>' +
       '<span style="font-size:11px;color:#555">GLB loads correctly on GitHub Pages (HTTP).</span>';
+    drawRefLines();
     buildAllArteries();
     selectArtery('dorsal');
   }
@@ -426,7 +463,8 @@ renderer.domElement.addEventListener('pointerup', e => {
 function recolorArtery(id, selected) {
   const g = arteryGroups[id];
   if (!g) return;
-  const mat = makeMat(selected);
+  const def = ARTERY_DEFS.find(d => d.id === id);
+  const mat = makeMat(selected, def?.color ?? 0x8b0000);
   g.children.forEach(m => { m.material.dispose(); m.material = mat.clone(); });
   mat.dispose();
 }
@@ -558,6 +596,31 @@ document.getElementById('btn-reset').addEventListener('click', () => {
   menu.classList.remove('open');
 });
 
+document.getElementById('btn-toggle-grid').addEventListener('click', () => {
+  gridGroup.visible = !gridGroup.visible;
+  document.getElementById('btn-toggle-grid').textContent =
+    gridGroup.visible ? 'Hide Grid' : 'Show Grid';
+  menu.classList.remove('open');
+});
+
+document.getElementById('btn-toggle-refs').addEventListener('click', () => {
+  refLineGroup.visible = !refLineGroup.visible;
+  document.getElementById('btn-toggle-refs').textContent =
+    refLineGroup.visible ? 'Hide Ref Lines' : 'Show Ref Lines';
+  menu.classList.remove('open');
+});
+
+document.getElementById('btn-toggle-veins').addEventListener('click', () => {
+  const veinIds = ARTERY_DEFS.filter(d => d.type === 'vein').map(d => d.id);
+  const anyVisible = veinIds.some(id => arteryGroups[id]?.visible !== false);
+  veinIds.forEach(id => {
+    if (arteryGroups[id]) arteryGroups[id].visible = !anyVisible;
+  });
+  document.getElementById('btn-toggle-veins').textContent =
+    anyVisible ? 'Show Veins' : 'Hide Veins';
+  menu.classList.remove('open');
+});
+
 document.getElementById('btn-about').addEventListener('click', () => {
   document.getElementById('modal-overlay').classList.add('open');
   menu.classList.remove('open');
@@ -566,6 +629,64 @@ document.getElementById('btn-about').addEventListener('click', () => {
 document.getElementById('close-modal').addEventListener('click', () => {
   document.getElementById('modal-overlay').classList.remove('open');
 });
+
+// ── 3D Grid ────────────────────────────────────────────────────────────────
+// Front-facing XY grid centred on the face. Each cell = 0.1 scene units ≈ 11.5 mm.
+// A second horizontal XZ grid sits at chin level for depth orientation.
+const gridGroup = new THREE.Group();
+gridGroup.visible = false;
+scene.add(gridGroup);
+
+(function buildGrid() {
+  // Front grid: XY plane at z=0.55 (just ahead of nose tip)
+  const frontGrid = new THREE.GridHelper(2.4, 24, 0x4455aa, 0x2a3366);
+  frontGrid.rotation.x = Math.PI / 2;
+  frontGrid.position.z = 0.55;
+  gridGroup.add(frontGrid);
+
+  // Floor grid: XZ plane at y=-0.55 (below chin) for depth context
+  const floorGrid = new THREE.GridHelper(2.4, 24, 0x4455aa, 0x2a3366);
+  floorGrid.position.y = -0.55;
+  gridGroup.add(floorGrid);
+
+  // Axes (X=red, Y=green, Z=blue), length 0.5 each
+  const axes = new THREE.AxesHelper(0.5);
+  axes.position.set(0, 0, 0);
+  gridGroup.add(axes);
+})();
+
+// ── Reference Lines ────────────────────────────────────────────────────────
+// Dashed landmark overlays drawn in front of the face (z=0.54) to identify
+// key horizontal planes and the facial midline.
+const refLineGroup = new THREE.Group();
+refLineGroup.renderOrder = 2;
+scene.add(refLineGroup);
+
+const REF_Z = 0.54;  // just in front of nose tip
+
+const REF_LINES = [
+  // Intercanthal line (inner-eye level)
+  { pts: [[-0.28, 0.25, REF_Z], [0.28, 0.25, REF_Z]], color: 0x6699ff, label: 'intercanthal' },
+  // Alar base line
+  { pts: [[-0.22, -0.095, REF_Z], [0.22, -0.095, REF_Z]], color: 0x66bbff, label: 'alar base' },
+  // Vermilion border line
+  { pts: [[-0.24, -0.278, REF_Z], [0.24, -0.278, REF_Z]], color: 0x66bbff, label: 'vermilion' },
+  // Facial midline
+  { pts: [[0, 0.52, REF_Z], [0, -0.54, REF_Z]], color: 0x8899ff, label: 'midline' },
+];
+
+function drawRefLines() {
+  refLineGroup.clear();
+  REF_LINES.forEach(({ pts, color }) => {
+    const geo = new THREE.BufferGeometry().setFromPoints(
+      pts.map(([x, y, z]) => new THREE.Vector3(x, y, z))
+    );
+    const mat  = new THREE.LineDashedMaterial({ color, dashSize: 0.025, gapSize: 0.015, opacity: 0.65, transparent: true });
+    const line = new THREE.Line(geo, mat);
+    line.computeLineDistances();
+    refLineGroup.add(line);
+  });
+}
 
 // ── Render Loop ────────────────────────────────────────────────────────────
 (function tick() {
